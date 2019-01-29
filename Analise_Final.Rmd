@@ -1,0 +1,669 @@
+---
+title: "Estudo Descritivo e Preditivo sobre Vinhos"
+author: "gsh87"
+date: "Jan 2019"
+output: 
+  flexdashboard::flex_dashboard:
+    theme: spacelab
+    vertical_layout: scroll
+    smooth_scroll: TRUE
+---
+
+<style type="text/css">
+
+.chart-title {  /* chart_title  */
+   font-size: 20px;
+</style>
+<!-- ################################################# -->
+```{r,echo=FALSE,include=FALSE}
+################################### 0 - Limpeza
+# removendo lixo da memoria
+rm(list=ls())
+set.seed(123)
+```
+
+
+```{r,echo=FALSE,results='hide',warning=FALSE,message=FALSE}
+## 1 - Pacotes
+## 1 - Pacotes
+options(repos=c(CRAN="http://vps.fmvz.usp.br/CRAN/"))
+library(pacman)    # pacote para load das bibliotecas
+p_load(stats)     #  Modelos ARIMA
+p_load(agricolae)# testes
+p_load(lmtest)    # testes de residuos
+p_load(randtests) # pacotes de testes estatisticos
+p_load(rms)       # pacote para stepwise
+p_load(forecast)  # forecast
+p_load(smooth)    # SMA - simple moving average
+p_load(nnfor)     # neural networks for time series
+p_load(h2o)
+p_load(fBasics)   # estatistica basica
+p_load(fpc)      # Flexible Procedures for Clustering
+p_load(factoextra) #factoextra for visualizing clusters using ggplot2 plotting system
+p_load(cluster)   # cluster for computing pam and for analyzing cluster silhouettes
+p_load(NbClust) #NbClust for finding the optimal number of clusters
+p_load(factoextra) # numero otimo de clusters
+## pacotes graficos ##
+p_load(ggplot2)   # grafico
+p_load(ggthemes)  # grafico 
+p_load(gridExtra) # Graficos em matrizes
+p_load(plotly)    # interative graphics
+p_load(ggcorrplot) # correlacao
+p_load(ggExtra)     # Add marginal Histogram
+p_load(ggalt)        # circulos no ggplot
+## pacotes de manipulacao ##
+p_load(lubridate) # tratamento de datas
+p_load(plyr)     # empilhamento
+p_load(magrittr)   # pipeline
+p_load(dplyr)      # manipulacao de base
+p_load(knitr)       # apresentacao
+p_load(binomTools)   # extrai
+p_load(vcd)          
+p_load(DescTools)      # summary grafico
+p_load(RODBC)          # conexao ODC
+p_load(sqldf)          # sqldf
+p_load(corrplot)       # correlacao
+p_load(prais)
+p_load(Metrics)
+p_load(dummies)
+p_load(reshape2)       # empilha as colunas usando uma flag
+## Packages visual
+p_load(flexdashboard)
+p_load(DT)
+p_load(factoextra) #factoextra for visualizing clusters using ggplot2 plotting system
+p_load(cluster)   # cluster for computing pam and for analyzing cluster silhouettes
+p_load(NbClust) #NbClust for finding the optimal number of clusters
+p_load(stringr)
+p_load(PerformanceAnalytics)
+p_load(rpart)
+p_load(randomForest)
+p_load(glmnet)         # regressoes com LASSO
+p_load(ROCR)
+```
+
+<!-- ################################################# -->
+<!-- ################################################# -->
+<!-- ################################################# -->
+
+Analise Descritiva {data-orientation=rows}
+===================================== 
+
+imput {.sidebar}
+-------------------------------------
+
+Análise Descritiva
+
+1. Na primeira etapa, processamos uma análise descritiva dos dados, buscando presença de outliers e colinearidades dos dados.
+
+2. Usamos critérios de intervalo interquatil para a detecção de outliers, pontos com valores superiores aos extremos do boxplot serão descartados.
+
+3. O corte de outliers apesar de agressiva é necessária para diminuir a variabilidade dos preditores e portanto gerar modelos mais assertivos.
+
+
+
+Row  {.tabset .tabset-fade}
+-------------------------------------
+
+```{r,echo=FALSE,results='hide',warning=FALSE,message=FALSE}
+Base_Bruta <- read.csv(file="Base.csv",sep=";",dec = ".")
+Base_Bruta$Aux <- ifelse(str_length(Base_Bruta$alcohol)>=6,1,0)
+Base_Bruta2 <- Base_Bruta %>% filter(Aux==0) %>% mutate(alcohol_numeric = as.numeric(as.character(alcohol))) %>% select(-alcohol) %>% rename(alcohol= alcohol_numeric)
+
+## tipos de variaveis
+Type_Dates <- sapply(Base_Bruta, class) %>% data.frame()
+## descritiva das variaveis
+Descritiva <- basicStats(Base_Bruta2[,setdiff(colnames(Base_Bruta2),c("alcohol","type","Aux"))]) %>% data.frame()
+
+Qts_Linhas_bruta <- nrow(Base_Bruta)
+```
+
+
+### Variabilidade das variaveis quantitativas
+
+```{r,echo=FALSE,fig.align="center",fig.height=7,fig.width=10}
+base_grafico1 <- Base_Bruta2 %>% select("fixed.acidity","volatile.acidity",  "citric.acid") %>%  stack() %>% rename(Valores= values,Variaveis = ind)
+base_grafico2 <- Base_Bruta2 %>% select("residual.sugar","chlorides","density") %>%  stack() %>% rename(Valores= values,Variaveis = ind)
+base_grafico3 <- Base_Bruta2 %>% select("free.sulfur.dioxide","total.sulfur.dioxide") %>%  stack() %>% rename(Valores= values,Variaveis = ind)
+base_grafico4 <- Base_Bruta2 %>% select("pH","sulphates","alcohol") %>%  stack() %>% rename(Valores= values,Variaveis = ind)
+
+
+grafico1 <- ggplot(base_grafico1, aes(x = Variaveis, y = Valores)) +
+  geom_boxplot()
+
+grafico2 <- ggplot(base_grafico2, aes(x = Variaveis, y = Valores)) +
+  geom_boxplot()
+
+grafico3 <- ggplot(base_grafico3, aes(x = Variaveis, y = Valores)) +
+  geom_boxplot()
+
+grafico4 <- ggplot(base_grafico4, aes(x = Variaveis, y = Valores)) +
+  geom_boxplot()
+
+grid.arrange(grafico1,grafico2,grafico3,grafico4,nrow=2,ncol=2)
+```
+
+
+### Medidas descritivas das variaveis quantitativas
+
+```{r,echo=FALSE,fig.align="center",fig.height=7,fig.width=5}
+## tratamento do teor alcoolico variavel factor
+
+datatable(Descritiva) 
+```
+
+### Descritiva das variaveis: Tipos de variaveis
+    
+```{r,echo=FALSE,fig.align="center",fig.height=7,fig.width=5}
+# tipos de variaveis
+datatable(Type_Dates)
+```
+    
+
+```{r,echo=FALSE}
+## tratamemto dos outliers, retirada da base
+Base_Bruta3<-Base_Bruta2[!Base_Bruta2$fixed.acidity %in% boxplot.stats(Base_Bruta2$fixed.acidity)$out,]
+
+Base_Bruta3<-Base_Bruta3[!Base_Bruta3$volatile.acidity%in% boxplot.stats(Base_Bruta3$volatile.acidity)$out,]
+
+Base_Bruta3<-Base_Bruta3[!Base_Bruta3$citric.acid %in% boxplot.stats(Base_Bruta3$citric.acid)$out,]
+
+Base_Bruta3<-Base_Bruta3[!Base_Bruta3$residual.sugar %in% boxplot.stats(Base_Bruta3$residual.sugar)$out,]
+
+Base_Bruta3<-Base_Bruta3[!Base_Bruta3$chlorides %in% boxplot.stats(Base_Bruta3$chlorides)$out,]
+
+Base_Bruta3<-Base_Bruta3[!Base_Bruta3$free.sulfur.dioxide %in% boxplot.stats(Base_Bruta3$free.sulfur.dioxide)$out,]
+
+Base_Bruta3<-Base_Bruta3[!Base_Bruta3$total.sulfur.dioxide%in% boxplot.stats(Base_Bruta3$total.sulfur.dioxide)$out,]
+
+Base_Bruta3<-Base_Bruta3[!Base_Bruta3$density %in% boxplot.stats(Base_Bruta3$density)$out,]
+
+Base_Bruta3<-Base_Bruta3[!Base_Bruta3$pH %in% boxplot.stats(Base_Bruta3$pH)$out,]
+
+Base_Bruta3<-Base_Bruta3[!Base_Bruta3$sulphates %in% boxplot.stats(Base_Bruta3$sulphates)$out,]
+
+Base_Bruta3<-Base_Bruta3[!Base_Bruta3$alcohol %in% boxplot.stats(Base_Bruta3$alcohol)$out,]
+
+
+
+### qts de linhas no final
+Qts_Linhas_Final <- nrow(Base_Bruta3)
+Qts_Dropps <- paste(100*((Qts_Linhas_bruta-Qts_Linhas_Final)/Qts_Linhas_bruta) %>% round(3),"%",sep="")
+
+
+Base_Final <- Base_Bruta3 %>% select("type","fixed.acidity","volatile.acidity","citric.acid" ,"residual.sugar","chlorides" ,"free.sulfur.dioxide","total.sulfur.dioxide","density","pH","sulphates","alcohol","quality")
+```
+
+Collumn 
+-------------------------------------
+### Distribuição das Variaveis explicativas
+
+```{r,echo=FALSE,fig.align="center",fig.height=7,fig.width=7}
+### Distribuição das Variaveis explicativas
+Base_Histograma <- Base_Final %>% select(setdiff(names(Base_Final),c("type","quality"))) %>%  stack() %>% rename(Valores= values,Variaveis = ind)
+
+Grafico6 <- ggplot(Base_Histograma,aes(x=Valores))+
+  geom_histogram(col="blue",
+                 fill="royalblue",alpha=0.5)+
+  labs(title="Distribuição das Variaveis explicativas") +
+  labs(x="classes", y="Freq.Relativa")+
+  facet_wrap(~Variaveis,scales = 'free_x')
+Grafico6
+```
+
+### Correlação entre as variaveis
+    
+```{r,echo=FALSE,fig.align="center",fig.height=7,fig.width=6}
+### Correlação entre as variaveis
+campos <- setdiff(names(Base_Final),c("type"))
+correlacao <- Base_Final %>% select(campos) %>% cor()
+Grafico5 <- ggcorrplot(correlacao, hc.order = TRUE, 
+                 type = "lower", 
+                 lab = TRUE, 
+                 lab_size = 3, 
+                 method="circle", 
+                 title="Correlação entre as variaveis explicativas")
+Grafico5
+```
+
+
+
+
+
+
+Row  
+-------------------------------------
+### Observações sobre a Limpeza dos dados
+
+* Usando o critério de intervalo interquartil e os dados com erro de input, retiramos `r Qts_Dropps` da base, reduzindo as quantidade de instâncias de `r Qts_Linhas_bruta` para `r Qts_Linhas_Final`.
+
+* Não ouve  a necessidade de análise de missings pois a base estava completa (conforme os dados  das tabelas descritivas).
+
+
+* Por inspeção visual nota-se que os dados não tendem a seguir a distribuição normal, o teste de Shapiro Wilk ou Kolgomorov-Sirmov poderiam ser empregados para estabelecer a significância estatística da não normalidade dos dados.
+
+* Nota-se a presença de correlação entre algumas variáveis explicativas (altos valores de correlação na matriz acima), para um segundo sprint é necessário um estudo mais profundo sobre tais associações.
+
+<!-- ################################################# -->
+<!-- ################################################# -->
+<!-- ################################################# -->
+Regressão {data-orientation=rows}
+=====================================  
+
+imput {.sidebar}
+-------------------------------------
+
+ Problema de Regressão
+
+1. Neste bloco o objetivo é predizer o valor exato dos score de qualidade
+
+2. Usamos as métricas RMSE e MAE, para avaliar o comportamento dos modelos propostos
+
+3. O método de cross validation usado foi do tipo holdout.
+
+4. Para visualização usamos o histograma dos desvios (erro = previsto-realizado) e um gráfico de  dispersão entre o realizado e o predito (quanto mais concentrados os dados estiverem na diagonal, melhor é o ajuste). 
+
+Row {.tabset .tabset-fade}
+-------------------------------------
+
+```{r,echo=FALSE,fig.align="center",fig.height=5,fig.width=10}
+
+## funcoes globais e particao da base de dados
+ERRO <- function(Predito_Fit,Real_Fit,Predito_Test,Real_Test,modelo)
+{
+  Vetor_Erros_Fit <- Real_Fit-Predito_Fit
+  MAE_Fit <- mean(abs(Vetor_Erros_Fit))
+  RMSE_Fit <- sqrt(mean(Vetor_Erros_Fit^2))
+  
+  Vetor_Erros_Test <- Real_Test-Predito_Test
+  MAE_Test <- mean(abs(Vetor_Erros_Test))
+  RMSE_Test <- sqrt(mean(Vetor_Erros_Test^2))
+  
+  Erros <- data.frame(MAE_Fit,RMSE_Fit,MAE_Test,RMSE_Test,modelo)
+  
+  return(Erros)
+}
+
+
+
+
+PLOT_ATUAL_PREDITO<-function(actual, predicted){
+  Erro = predicted - actual
+  par(mfrow = c(1,2), oma = c(0, 0, 2, 0))
+  data_plot<-data.frame(x=actual, y=predicted)
+  graph<-ggplot(data_plot, aes(x=actual, y=predicted)) + geom_point(shape=18, color="blue")+labs(title="",
+  x="Observado", y = "predito") + geom_abline(intercept = 1, slope = 1, color="red", size=1.5)
+  hist<-ggplot(data_plot, aes(x=actual, y=predicted)) + geom_bar(stat="identity", fill="steelblue")+labs(title="",x="Diferença entre predito e observado", y = "Frequência")
+  
+return(grid.arrange(graph, hist, nrow=1, ncol=2,top=textGrob("Desempenho entre predito e observado no conjunto de Teste",gp=gpar(fontsize=18,font=3))))
+}
+
+
+Taxa_Cross <- 0.75
+indice <- sample(1: nrow(Base_Final),round(Taxa_Cross*nrow(Base_Final)))
+Train <- Base_Final[indice,]
+Test <- Base_Final[-indice,]
+
+```
+
+### Modelo GLM 
+    
+```{r,echo=FALSE,fig.align="center",fig.height=5,fig.width=10}
+## glm
+Modelo_GLM <- glm(quality~., data=Train,family = gaussian)
+
+# Predicao
+Predicao_GLM <- predict(Modelo_GLM,newdata = Test,type = "response")
+
+## ERRO(Predito_Fit,Real_Fit,Predito_Test,Real_Test,modelo)
+Erro_GLM <- ERRO(Modelo_GLM$fitted.values,
+                 Train$quality,
+                 Predicao_GLM,
+                 Test$quality,"GLM")
+
+Erro_GLM %<>% data.frame()
+PLOT_ATUAL_PREDITO(Test$quality,Predicao_GLM)
+```
+
+### Metricas do Teste e Treino 
+
+```{r,echo=FALSE,fig.align="center",fig.height=5,fig.width=10}
+kable(Erro_GLM, align = "c")
+```
+
+Row {.tabset .tabset-fade}
+------------------------------
+### Modelo: Arvore de decisão  
+
+```{r,echo=FALSE,fig.align="center",fig.height=5,fig.width=10}
+Modelo_TREE <-  rpart(quality~., data = Train,method="class")
+
+
+Predicao_TREE <- predict(Modelo_TREE, newdata = Test, type = "class") %>% as.numeric()
+
+Fit_Tree <- predict(Modelo_TREE, newdata = Train, type = "class") %>% as.numeric()
+## ERRO(Predito_Fit,Real_Fit,Predito_Test,Real_Test,modelo)
+Erro_Tree <- ERRO(Fit_Tree,
+                 Train$quality,
+                 Predicao_TREE,
+                 Test$quality,"Tree")
+Erro_Tree %<>% data.frame()
+
+PLOT_ATUAL_PREDITO(Test$quality,Predicao_TREE)
+```
+
+### Metricas do Teste e Treino 
+
+```{r,echo=FALSE,fig.align="center",fig.height=5,fig.width=10}
+kable(Erro_Tree, align = "c")
+```
+
+
+Row  {.tabset .tabset-fade}
+------------------------------
+### Modelo: Random Forest 
+
+```{r,echo=FALSE,fig.align="center",fig.height=5,fig.width=10}
+Modelo_Rf <- randomForest(quality~., data = Train)
+
+Predito_Rf <- predict(Modelo_Rf, newdata = Test,type="response")
+
+Fit_Rf <- predict(Modelo_Rf,newdata=Train,type="response")
+## ERRO(Predito_Fit,Real_Fit,Predito_Test,Real_Test,modelo)
+Erro_Rf <- ERRO(Fit_Rf,
+                 Train$quality,
+                 Predito_Rf,
+                 Test$quality,"RandomForest")
+Erro_Rf %<>% data.frame()
+
+PLOT_ATUAL_PREDITO(Test$quality,Predito_Rf)
+```
+
+### Metricas do Teste e Treino 
+
+```{r,echo=FALSE,fig.align="center",fig.height=5,fig.width=10}
+kable(Erro_Rf, align = "c")
+```
+
+Row  
+------------------------------
+### Observações sobre os modelos de regressão.
+
+* Em todos os modelos nota-se que o erro (diferença entre o real e o predito) tende a uma distribuição normal, novamente aqui seria necessário o uso de algum teste de normalidade.
+
+* Entre os modelos apresentados nota-se que o RandomForest apresenta menores valores das métricas de erro no conjunto de validação/teste, porém o modelo que apresentou menor gap entre a métrica de validação e de teste foi o glm.
+
+
+
+
+<!-- ################################################# -->
+<!-- ################################################# -->
+<!-- ################################################# -->
+Classificação {data-orientation=rows}
+=====================================  
+
+imput {.sidebar}
+-------------------------------------
+
+ Problema de Classificação
+
+1. Usamos o cutoff de 5 para os dados, assim valores acima de 5 foram flagados como 1 e 0 caso contrário.
+
+2. Os modelos foram treinados usando balanceamento de classes, mas a separação holdout não usou o balanceamento de classes (veja Observações finais).
+
+3. Conforme vimos na parte descritiva dos dados, notamos que usando o cutoff de 5, 32% dos dados encontra-se no grupo acima com qualidade acima de 5 e o restante (68%) abaixo. Assim o primeiro modelo que atribui todos os casos como abaixo de 5 tem acuracia de 68% (este é o nosso valor bassal de qualidade dos modelos).
+
+```{r,echo=FALSE,fig.align="center",warning=FALSE,include=FALSE,message=FALSE}
+rm(list = setdiff(ls(),c("Base_Final")))
+
+
+## dummie da variavel
+Base_Final$quality_dummie <- ifelse(Base_Final$quality>5,1,0) %>% factor()
+Base_Final%<>% select(-quality)
+
+Tabela_Prop <- table(Base_Final$quality_dummie)/nrow(Base_Final) %>% round(2)
+
+# inicializacao do h2o
+h2o.no_progress()
+h2o.init(nthreads=-1)
+# carregamento da base de dados
+Base_h2o_full <- as.h2o(x = Base_Final, destination_frame = "Base_Final")
+
+splits <- h2o.splitFrame(Base_h2o_full, ratios = 0.75, seed = 12345)
+# train
+Base_Train_h2o <- splits[[1]]
+# Test
+Base_test_h2o <- splits[[2]]
+
+# Preparacao das variaveis resposta e variaveis dependentes
+y <- "quality_dummie"  # resposta
+x <- setdiff(names(Base_Train_h2o),y)   # dependente
+
+
+################# Sem h2o
+Taxa_Cross <- 0.75
+indice <- sample(1: nrow(Base_Final),round(Taxa_Cross*nrow(Base_Final)))
+Train <- Base_Final[indice,]
+Test <- Base_Final[-indice,]
+
+```
+
+Row  {.tabset .tabset-fade}
+------------------------------
+### Modelo: Regressão Logistica com Regularização
+
+```{r,echo=FALSE,fig.align="center",fig.height=7,fig.width=7}
+Logistic_fit2 <- h2o.glm(x = x, 
+                    y = y, 
+                    training_frame = Base_Train_h2o,
+                    model_id = "Logistic_fit2",
+                    lambda_search=TRUE,
+                    family = "binomial",
+                    balance_classes = TRUE,
+                    nfolds=5)
+# predicao
+Logistic_perf2 <- h2o.performance(model = Logistic_fit2,
+                             newdata = Base_test_h2o)
+AUC_Logistic_Test <- h2o.auc(Logistic_perf2)
+AUC_Logistic_Train <- h2o.auc(Logistic_fit2,train=TRUE)
+plot(Logistic_perf2,type="roc",col="royalblue")
+text(0.9,0.1,paste("AUC = ",round(AUC_Logistic_Test,2),sep=""))
+# Base de AUCS
+Base_AUC <- data.frame(Modelo="Logistico",AUC_Test=AUC_Logistic_Test,AUC_Train=AUC_Logistic_Train)
+
+```
+
+### Variaveis Importantes
+
+```{r,echo=FALSE,fig.align="center",fig.height=7,fig.width=7}
+#Var_IMPORT <- h2o.varimp(Logistic_fit2) %>% as.data.frame() 
+h2o.varimp_plot(Logistic_fit2,num_of_features = 25)
+
+#Var_IMPORT
+```
+
+### Matriz de Confusão
+
+```{r,echo=FALSE}
+Tabela_Confusao <- h2o.confusionMatrix(Logistic_perf2,metrics="accuracy") %>% as.data.frame()
+kable(Tabela_Confusao, align = "c")
+
+```
+
+Row {.tabset .tabset-fade}
+-------------------------------------
+### Modelo: Random Forest
+
+```{r,echo=FALSE,fig.align="center",fig.height=7,fig.width=7}
+rf_fit2 <- h2o.randomForest(x=x,
+                           y=y,
+                           training_frame = Base_Train_h2o,
+                           model_id = "rf_fit2",
+                           seed=1,
+                           balance_classes = TRUE,
+                           nfolds=5)
+# predicao
+rf_perf2 <- h2o.performance(model=rf_fit2,
+                            newdata =Base_test_h2o)
+AUC_rf_Test <- h2o.auc(rf_perf2)
+AUC_rf_Train <- h2o.auc(rf_fit2,train=TRUE)
+plot(rf_perf2,type="roc",col="royalblue")
+text(0.9,0.1,paste("AUC = ",round(AUC_rf_Test,2),sep=""))
+Base_AUC2 <- data.frame(Modelo="Random",AUC_Test=AUC_rf_Test,AUC_Train=AUC_rf_Train)
+Base_AUC <- rbind(Base_AUC,Base_AUC2)
+```
+
+### Variaveis Importantes
+
+```{r}
+h2o.varimp_plot(rf_fit2,num_of_features = 25)
+```
+
+### Matriz de Confusão
+
+```{r,echo=FALSE}
+Tabela_Confusao <- h2o.confusionMatrix(rf_perf2,metrics="accuracy") %>% as.data.frame()
+kable(Tabela_Confusao, align = "c")
+
+```
+
+Row {.tabset .tabset-fade}
+-------------------------------------
+### Modelo: GBM
+
+```{r,echo=FALSE,fig.align="center",fig.height=7,fig.width=7}
+gbm_fit2 <- h2o.gbm(x=x,
+                    y=y,
+                    training_frame = Base_Train_h2o,
+                    distribution = "bernoulli",
+                    nfolds=5,
+                    model_id = "gbm_fit2",
+                    seed=1)
+# Predicao
+gbm_perf2 <- h2o.performance(gbm_fit2,newdata=Base_test_h2o)
+AUC_gbm_Test <- h2o.auc(gbm_perf2)
+AUC_gbm_Train <- h2o.auc(gbm_fit2,train=TRUE)
+plot(gbm_perf2,type="roc",col="royalblue")
+text(0.9,0.1,paste("AUC = ",round(AUC_gbm_Test,2),sep=""))
+Base_AUC3 <- data.frame(Modelo="GBM",AUC_Test=AUC_gbm_Test,AUC_Train=AUC_gbm_Train)
+Base_AUC <- rbind(Base_AUC,Base_AUC3)
+```
+
+### Variaveis Importantes
+
+```{r,echo=FALSE,fig.align="center",fig.height=7,fig.width=7}
+h2o.varimp_plot(gbm_fit2,num_of_features = 25)
+```
+
+
+### Matriz de Confusão
+
+```{r,echo=FALSE}
+Tabela_Confusao <- h2o.confusionMatrix(gbm_perf2,metrics="accuracy") %>% as.data.frame()
+kable(Tabela_Confusao, align = "c")
+
+```
+
+Row {.tabset .tabset-fade}
+-------------------------------------
+### Modelo:  Redes
+
+```{r,echo=FALSE,fig.align="center",fig.height=7,fig.width=7}
+redes_fit2 <- h2o.deeplearning(x=x,
+                               y=y,
+                               training_frame = Base_Train_h2o,
+                               model_id = "redes_fit2",
+                               epochs = 5,
+                               hidden = c(6,3),
+                               balance_classes=TRUE,
+                               seed=1)
+# Predicao
+redes_perf2 <- h2o.performance(redes_fit2,newdata = Base_test_h2o)
+AUC_redes_Test <- h2o.auc(redes_perf2)
+AUC_redes_Train <- h2o.auc(redes_fit2,train=TRUE)
+plot(redes_perf2,type="roc",col="royalblue")
+text(0.9,0.1,paste("AUC = ",round(AUC_redes_Test,2),sep=""))
+Base_AUC4 <- data.frame(Modelo="Redes",AUC_Test=AUC_redes_Test,AUC_Train=AUC_redes_Train)
+Base_AUC <- rbind(Base_AUC,Base_AUC4) %>% data.frame()
+```
+
+### Variaveis Importantes
+
+```{r,echo=FALSE}
+h2o.varimp_plot(redes_fit2,num_of_features = 25)
+# Var_IMPORT2 <- h2o.varimp(redes_fit2) %>% as.data.frame()
+# Var_IMPORT2[1:15,]
+```
+
+### Matriz de Confusão
+
+```{r,echo=FALSE}
+Tabela_Confusao <- h2o.confusionMatrix(redes_perf2,metrics="accuracy") %>% as.data.frame()
+kable(Tabela_Confusao, align = "c")
+
+```
+
+
+<!-- ################################################# -->
+<!-- ################################################# -->
+<!-- ################################################# -->
+
+Comparação dos Modelos de Classificação {data-orientation=rows}
+=====================================  
+
+imput {.sidebar}
+-------------------------------------
+Observações:
+
+1. Metricas no treino e Teste.
+
+2. Avaliação do GAP entre a métrica do treino e do teste.
+
+Row 
+-------------------------------------
+### Comparação dos modelos
+
+```{r,echo=FALSE,fig.align="center",fig.height=7,fig.width=7}
+Base_Comparacao <- Base_AUC %>%  mutate(gap=abs(AUC_Test-AUC_Train) %>% round(4)) %>% mutate(AUC_Test=AUC_Test %>% round(2),AUC_Train=AUC_Train %>% round(2))
+Grafico_final <- ggplot(Base_Comparacao, aes(x= Modelo,group=1)) + 
+  geom_point(aes(y = AUC_Train, colour = "AUC_Train"),size=5) + 
+  geom_point(aes(y = AUC_Test, colour = "AUC_Test"),size=5)+
+  labs(title="AUC Treinamento e Teste",x="Modelo",y="AUC")+guides(fill = "none")
+Grafico_final
+```
+
+Row
+------------------------------
+### Tabela com os AUC
+
+```{r,echo=FALSE,fig.align="center",fig.height=7,fig.width=7}
+knitr::kable(Base_Comparacao)
+```
+
+
+Row
+------------------------------
+### Observações sobre os classificadores
+
+* Nota-se que RandomForest apresentou melhor valor de AUC no treino, o modelo de redes neurais e logístico com Lasso apresentaram os menores valores de gap entre os aucs de treino e teste, indicando assim que generalizaram melhor que os demais métodos.
+
+
+
+<!-- ################################################# -->
+<!-- ################################################# -->
+<!-- ################################################# -->
+
+Observações Finais {data-orientation=rows}
+===================================== 
+
+1. Nota-se a presença de uma grande volume de outliers nas variáveis preditoras, além de valores com erros de formatação, um primeiro passo para a evolução dos modelos é tentar entender com a área de negócio se os valores coletados fazem sentido, se não há erro de extração dos dados.
+
+2. Conforme já mencionado tanto nos modelos regressores quanto nos modelos de classificação usamos o holdout como método de cross validação tal método consiste em dividir a base em treino e teste, um proximo passo seria usar o método de kfolds para obter o comportamento média das métricas de desempenho no treino e no teste, ou outra opção seria repetir o processo de holdout um certo número de vezes, variando a amostragem da partição dos dados para obter o comportamento médio da métrica de desempenho.
+
+3. Consideramos um bom modelo, aquele modelo que tem maior capacidade de generalização, ou seja, avaliamos a diferença entre a métrica de  desempenho entre o treino e o teste, um bom modelo deve apresentar comportamento próximo tanto no teste como no treino, ou seja, o gap entre as métricas de treino e validação devem ser pequenos quando comparados com outros modelos.
+
+4. Conforme visto na análise descritiva, nota-se a presença de altas correlações entre algumas variáveis explicativas, para a modelagem preditiva o uso de tais variáveis correlacionadas acaba gerando modelos menos precisos, por isso em uma segunda etapa é necessário o uso de métodos como stepwise para a seleção de variáveis e possivelmente o uso de análise de componentes principais para a redução da quantidade de variáveis explicativas objetivando obter um conjunto de características explicativas independentes.
+
+5. Outra questão que precisa ser abordado é o balanceamento das classes de treino e teste, note que com a binarização cerca de 32 % dos casos são maiores que 5, (sendo que o ideal para a particição em treino/teste é que a caracteristica de interesse esteja presente em aproximadamente 50% dos casos).
+
+
+
